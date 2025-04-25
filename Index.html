@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Bouncing Video Remix</title>
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+      color: white;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
+    #controls {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.7);
+      padding: 1rem;
+      z-index: 9999;
+      border-radius: 8px;
+    }
+    input {
+      width: 100px;
+    }
+    video {
+      position: absolute;
+      will-change: transform;
+      transform-origin: center;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+<div id="recorderPage">
+  <h1 style="text-align:center;">📸 HD Webcam Recorder</h1>
+  <video id="preview" autoplay muted style="display:block;margin:1rem auto;border:2px solid white;width:640px;height:360px;"></video><br>
+  <div style="text-align:center;">
+    <button id="startBtn">🎥 Start Recording</button>
+    <button id="stopBtn" disabled>🛑 Stop Recording</button>
+    <button id="downloadBtn" disabled>⬇️ Download</button>
+    <button id="remixBtn" disabled>✨ Remix!</button>
+  </div>
+  <h2 style="text-align:center;">▶️ Playback</h2>
+  <video id="playback" controls loop muted style="display:block;margin:1rem auto;border:2px solid white;width:640px;height:360px;"></video>
+</div>
+
+<div id="remixPage" class="hidden">
+  <div id="controls">
+    <label>Size: <input type="range" id="sizeSlider" min="10" max="200" value="100"></label><br>
+    <label>Scale: <input type="range" id="scaleSlider" min="1" max="30" value="10"></label><br>
+    <label>Bounce Speed: <input type="range" id="bounceSlider" min="1" max="20" value="5"></label><br>
+    <label>Rotation Speed: <input type="range" id="rotateSlider" min="0" max="10" value="1"></label>
+  </div>
+</div>
+
+<script>
+let preview = document.getElementById("preview");
+let playback = document.getElementById("playback");
+let startBtn = document.getElementById("startBtn");
+let stopBtn = document.getElementById("stopBtn");
+let downloadBtn = document.getElementById("downloadBtn");
+let remixBtn = document.getElementById("remixBtn");
+let remixPage = document.getElementById("remixPage");
+let recorderPage = document.getElementById("recorderPage");
+
+let mediaRecorder;
+let recordedChunks = [];
+let recordedBlobURL;
+
+navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: true })
+.then(stream => {
+  preview.srcObject = stream;
+  mediaRecorder = new MediaRecorder(stream);
+
+  mediaRecorder.ondataavailable = e => {
+    if (e.data.size > 0) recordedChunks.push(e.data);
+  };
+
+  mediaRecorder.onstop = () => {
+    let blob = new Blob(recordedChunks, { type: 'video/webm' });
+    recordedBlobURL = URL.createObjectURL(blob);
+    playback.src = recordedBlobURL;
+    playback.play();
+    downloadBtn.disabled = false;
+    remixBtn.disabled = false;
+
+    downloadBtn.onclick = () => {
+      let a = document.createElement('a');
+      a.href = recordedBlobURL;
+      a.download = 'recorded_video.webm';
+      a.click();
+    };
+  };
+});
+
+startBtn.onclick = () => {
+  recordedChunks = [];
+  mediaRecorder.start();
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
+};
+
+stopBtn.onclick = () => {
+  mediaRecorder.stop();
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+};
+
+remixBtn.onclick = () => {
+  recorderPage.classList.add("hidden");
+  remixPage.classList.remove("hidden");
+  launchRemix();
+};
+
+// --- Remix Logic ---
+function launchRemix() {
+  let sizeSlider = document.getElementById("sizeSlider");
+  let scaleSlider = document.getElementById("scaleSlider");
+  let bounceSlider = document.getElementById("bounceSlider");
+  let rotateSlider = document.getElementById("rotateSlider");
+
+  let videos = [];
+
+  for (let i = 0; i < 10; i++) {
+    let vid = document.createElement('video');
+    vid.src = recordedBlobURL;
+    vid.muted = true;
+    vid.loop = true;
+    vid.autoplay = true;
+    vid.style.width = sizeSlider.value + "px";
+    vid.style.height = sizeSlider.value + "px";
+    document.body.appendChild(vid);
+    videos.push({
+      el: vid,
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      dx: (Math.random() - 0.5) * bounceSlider.value,
+      dy: (Math.random() - 0.5) * bounceSlider.value,
+      rot: Math.random() * 360,
+      dRot: (Math.random() - 0.5) * rotateSlider.value,
+      startOffset: Math.random()
+    });
+
+    vid.onloadedmetadata = () => {
+      vid.currentTime = vid.duration * videos[i].startOffset;
+    };
+  }
+
+  function animate() {
+    videos.forEach(v => {
+      v.x += v.dx;
+      v.y += v.dy;
+      v.rot += v.dRot;
+
+      // bounce
+      if (v.x < 0 || v.x + v.el.clientWidth > window.innerWidth) v.dx *= -1;
+      if (v.y < 0 || v.y + v.el.clientHeight > window.innerHeight) v.dy *= -1;
+
+      // scale + rotate + move
+      let scale = scaleSlider.value / 10;
+      v.el.style.transform = `translate(${v.x}px, ${v.y}px) scale(${scale}) rotate(${v.rot}deg)`;
+      v.el.style.width = sizeSlider.value + "px";
+      v.el.style.height = sizeSlider.value + "px";
+    });
+
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+}
+</script>
+
+</body>
+</html>
